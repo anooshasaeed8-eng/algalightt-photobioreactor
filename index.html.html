@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlgaLight — 3D Photobioreactor Model | SDG 7 & 13</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#07111a;font-family:sans-serif;overflow:hidden;}
+#app{position:relative;width:100vw;height:100vh;}
+#c{display:block;width:100%;height:100%;}
+#topbar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:10px 18px;background:rgba(4,8,14,0.88);border-bottom:0.5px solid #0d2a3a;}
+#title-block{display:flex;flex-direction:column;}
+#title-block h1{font-size:14px;color:#4ab8d8;font-weight:500;}
+#title-block p{font-size:11px;color:#3a7a8a;margin-top:2px;}
+#sdgbadge{background:#0d2a1a;border:0.5px solid #1a6a3a;border-radius:6px;padding:4px 12px;font-size:12px;color:#4af0a0;}
+#bottombar{position:absolute;bottom:0;left:0;right:0;background:rgba(4,8,14,0.92);border-top:0.5px solid #0d2a3a;padding:9px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#infobox{font-size:12px;color:#5ab8d0;flex:1;min-height:22px;line-height:1.5;}
+#infobox strong{color:#4af0a0;}
+.cb{font-size:11px;padding:5px 12px;border-radius:5px;border:0.5px solid #1a4a5a;background:transparent;color:#4ab8d8;cursor:pointer;}
+.cb:hover{background:#0d2233;}.cb.on{background:#0d3a2a;border-color:#1a7a4a;color:#4af0a0;}
+#hint{position:absolute;top:58px;left:50%;transform:translateX(-50%);font-size:10px;color:rgba(80,180,140,0.55);pointer-events:none;white-space:nowrap;background:rgba(4,8,14,0.5);padding:3px 10px;border-radius:10px;}
+#legend{position:absolute;top:70px;right:16px;background:rgba(4,8,14,0.82);border:0.5px solid #0d2a3a;border-radius:8px;padding:10px 14px;font-size:11px;color:#5a9ab0;line-height:2;}
+#legend h3{font-size:11px;color:#4af0a0;font-weight:500;margin-bottom:4px;}
+.leg{display:flex;align-items:center;gap:7px;}
+.ls{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+  <div id="topbar">
+    <div id="title-block">
+      <h1>AlgaLight — 3D Photobioreactor Model</h1>
+      <p>Carbon capture · Oxygen production · Clean energy &nbsp;|&nbsp; University project — SDGs</p>
+    </div>
+    <span id="sdgbadge">SDG 7 · SDG 13</span>
+  </div>
+  <div id="hint">🖱 Drag to orbit &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Hover parts to explore</div>
+  <div id="legend">
+    <h3>Components</h3>
+    <div class="leg"><div class="ls" style="background:#88ffaa;opacity:.5"></div>Glass reactor tubes</div>
+    <div class="leg"><div class="ls" style="background:#0c6820"></div>Algae culture</div>
+    <div class="leg"><div class="ls" style="background:#1a6a44"></div>O₂ manifold &amp; pipes</div>
+    <div class="leg"><div class="ls" style="background:#0d2a40"></div>O₂ collection vessel</div>
+    <div class="leg"><div class="ls" style="background:#7a4a18"></div>CO₂ inlet manifold</div>
+    <div class="leg"><div class="ls" style="background:#3a2010"></div>CO₂ pump unit</div>
+    <div class="leg"><div class="ls" style="background:#0a2a18"></div>Biomass harvester</div>
+    <div class="leg"><div class="ls" style="background:#80ffcc;opacity:.6"></div>O₂ bubbles</div>
+  </div>
+  <div id="bottombar">
+    <div id="infobox">Hover any component to learn what it does.</div>
+    <button class="cb on" id="bL" onclick="toggleLight()">☀ Light</button>
+    <button class="cb on" id="bB" onclick="toggleBubble()">◎ Bubbles</button>
+    <button class="cb on" id="bR" onclick="toggleSpin()">↻ Auto-rotate</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const canvas=document.getElementById('c');
+const W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x07111a);
+scene.fog=new THREE.Fog(0x07111a,45,90);
+
+const camera=new THREE.PerspectiveCamera(46,W/H,0.1,200);
+camera.position.set(0,5,24);camera.lookAt(0,1,0);
+
+const amb=new THREE.AmbientLight(0x1a3a28,0.7);scene.add(amb);
+const sun=new THREE.DirectionalLight(0xfff4cc,2.5);
+sun.position.set(10,16,8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+const fill=new THREE.DirectionalLight(0x102040,0.5);fill.position.set(-10,4,-8);scene.add(fill);
+const glow=new THREE.PointLight(0x20ff70,1.8,25);glow.position.set(0,3,1);scene.add(glow);
+
+let lightOn=true,bubbleOn=true,spinOn=true;
+function toggleLight(){lightOn=!lightOn;sun.intensity=lightOn?2.5:0.1;amb.intensity=lightOn?0.7:0.3;glow.intensity=lightOn?1.8:0.3;document.getElementById('bL').classList.toggle('on',lightOn);}
+function toggleBubble(){bubbleOn=!bubbleOn;document.getElementById('bB').classList.toggle('on',bubbleOn);}
+function toggleSpin(){spinOn=!spinOn;document.getElementById('bR').classList.toggle('on',spinOn);}
+
+function sm(col,r=0.55,m=0){return new THREE.MeshStandardMaterial({color:col,roughness:r,metalness:m});}
+function mkCyl(rt,rb,h,col,seg=16){const mesh=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),sm(col));mesh.castShadow=true;return mesh;}
+function mkBox(w,h,d,col){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),sm(col));mesh.castShadow=true;mesh.receiveShadow=true;return mesh;}
+function add(obj,x,y,z){obj.position.set(x,y,z);scene.add(obj);return obj;}
+function lb(o,t,d){o.userData={label:t,desc:d};return o;}
+function hcyl(rt,h,col,seg=16){const m=mkCyl(rt,rt,h,col,seg);m.rotation.z=Math.PI/2;return m;}
+
+const TUBE_H=6.5,TR=0.38;
+const TX=[-6,-3,0,3,6];
+const TOP_Y=0.45+TUBE_H/2+0.35;
+const BOT_Y=0.45-TUBE_H/2-0.35;
+const MAN_END_X=7.4;
+
+// Floor
+add(mkBox(26,0.15,7,0x0a1a10),0,-3.0,0).receiveShadow=true;
+add(mkBox(24,0.08,5.5,0x0d2218),0,-2.9,0);
+
+// Base frame
+[-1.4,1.4].forEach(z=>{lb(add(mkBox(14.5,0.15,0.15,0x223322),0,-2.72,z),'Support rail','Longitudinal steel rail. All tubes mount onto this frame.');});
+TX.forEach(x=>{
+  add(mkBox(0.13,0.15,2.95,0x223322),x,-2.72,0);
+  [-1.4,1.4].forEach(z=>add(mkBox(0.11,0.38,0.11,0x1a3a28),x,-2.52,z));
+});
+[-7.4,7.4].forEach(x=>lb(add(mkBox(0.16,7.2,0.16,0x1a4a30),x,0.0,0),'Manifold support post','Vertical steel post anchors both top and bottom manifold pipes at the correct working height.'));
+
+// Tubes
+const tubeData=[];
+TX.forEach((tx,i)=>{
+  const grp=new THREE.Group();grp.position.set(tx,0.45,0);scene.add(grp);
+  const gm=new THREE.MeshPhysicalMaterial({color:0x88ffaa,transparent:true,opacity:0.13,roughness:0,transmission:0.88,side:THREE.DoubleSide,depthWrite:false});
+  const glass=new THREE.Mesh(new THREE.CylinderGeometry(TR,TR,TUBE_H,32,1,true),gm);
+  lb(glass,`Glass reactor tube ${i+1} of 5`,'Narrow borosilicate glass tube (50mm dia). Light penetrates the full cross-section. 5 parallel tubes give 5× the lit surface area vs one large tank — key to maximising photosynthesis.');
+  grp.add(glass);
+  const fm=new THREE.MeshStandardMaterial({color:0x0c6820,roughness:0.85,transparent:true,opacity:0.9});
+  const fluid=new THREE.Mesh(new THREE.CylinderGeometry(TR-0.06,TR-0.06,TUBE_H-0.1,28),fm);
+  lb(fluid,'Algae culture (Chlorella vulgaris)','Dense green microalgae suspension (~2g/L). Reaction: CO₂ + H₂O + sunlight → O₂ + biomass. Algae double their mass every 24hrs under good light conditions.');
+  grp.add(fluid);
+  [[TUBE_H/2,'Top flange — O₂ outlet','Oxygen bubbles rise through the algae culture and exit here into the top manifold pipe.'],
+   [-TUBE_H/2,'Bottom flange — CO₂ inlet','CO₂-enriched nutrient media enters here from the bottom manifold. Sparger nozzle creates fine bubbles for maximum gas-liquid contact.']].forEach(([y,t,d])=>{
+    const f=new THREE.Mesh(new THREE.CylinderGeometry(TR+0.1,TR+0.1,0.14,24),sm(0x1e5a38,0.4,0.5));f.position.y=y;lb(f,t,d);grp.add(f);
+  });
+  const ts=mkCyl(0.09,0.09,0.28,0x1a6a44,12);ts.position.y=TUBE_H/2+0.21;grp.add(ts);
+  const bs=mkCyl(0.09,0.09,0.28,0x7a4a18,12);bs.position.y=-TUBE_H/2-0.21;grp.add(bs);
+  const bubbles=[];
+  for(let b=0;b<22;b++){
+    const br=0.022+Math.random()*0.048;
+    const bm=new THREE.Mesh(new THREE.SphereGeometry(br,6,6),new THREE.MeshStandardMaterial({color:0x80ffcc,transparent:true,opacity:0.55,roughness:0.1}));
+    bm.position.set((Math.random()-.5)*(TR-0.08)*1.3,(Math.random()-.5)*(TUBE_H-0.5),(Math.random()-.5)*(TR-0.08)*1.3);
+    grp.add(bm);
+    bubbles.push({m:bm,spd:0.012+Math.random()*0.022,wob:Math.random()*Math.PI*2,ws:0.025+Math.random()*0.03});
+  }
+  tubeData.push({grp,fm,gm,bubbles});
+});
+
+// Top manifold
+lb(add(hcyl(0.12,15.0,0x1a6a44),0,TOP_Y,0),'O₂ top manifold pipe','Horizontal pipe collects oxygen gas from all 5 tubes simultaneously. Gas travels along this pipe toward the right-side riser.');
+
+const RISER_X=MAN_END_X;
+lb(add(mkCyl(0.12,0.12,1.9,0x1a6a44),RISER_X,TOP_Y+0.95,0),'O₂ riser pipe','Oxygen travels upward along this vertical pipe toward the collection vessel.');
+
+const O2_BOX_W=1.5,O2_PIPE_LEN=1.2;
+const O2_BOX_X=RISER_X+O2_PIPE_LEN+O2_BOX_W/2;
+const O2_BOX_Y=TOP_Y+1.9;
+lb(add(hcyl(0.12,O2_PIPE_LEN,0x1a6a44),RISER_X+O2_PIPE_LEN/2,O2_BOX_Y,0),'O₂ elbow pipe','90° connection redirects oxygen horizontally and feeds it directly into the collection vessel inlet.');
+
+const o2Box=add(mkBox(O2_BOX_W,1.0,1.0,0x0d2a40),O2_BOX_X,O2_BOX_Y,0);
+o2Box.material=sm(0x0d2a40,0.3,0.5);
+lb(o2Box,'O₂ collection vessel','Sealed pressure vessel receives oxygen directly from the connected elbow pipe. Oxygen stored here before piping to end-use — medical oxygen, building air enrichment, or biofuel process.');
+
+lb(add(mkCyl(0.11,0.11,0.24,0x2a4a6a),O2_BOX_X,O2_BOX_Y+0.62,0),'Pressure gauge','Monitors internal O₂ pressure. Automatic safety valve releases gas if overpressure is detected.');
+add(mkCyl(0.09,0.09,0.05,0x4a8aaa),O2_BOX_X,O2_BOX_Y+0.75,0);
+lb(add(hcyl(0.09,0.9,0x1a6a44),O2_BOX_X+O2_BOX_W/2+0.45,O2_BOX_Y,0),'O₂ outlet to end-use','Clean oxygen exits here. Applications: medical O₂ supply, indoor air enrichment, industrial oxidation, or aquaculture.');
+
+// Bottom manifold
+lb(add(hcyl(0.12,15.0,0x7a4a18),0,BOT_Y,0),'CO₂ inlet manifold','Distributes CO₂-enriched nutrient media evenly into all 5 reactor tubes. Equal feeding ensures uniform algae growth across all tubes.');
+
+const CO2_RISER_X=-MAN_END_X;
+lb(add(mkCyl(0.12,0.12,1.9,0x7a4a18),CO2_RISER_X,BOT_Y-0.95,0),'Recirculation pipe','Pump forces CO₂-rich media upward into the bottom manifold at 0.1–0.3 m/s — keeps algae suspended and prevents cell settling.');
+
+const CO2_BOX_W=1.5,CO2_PIPE_LEN=1.1;
+const CO2_BOX_X=CO2_RISER_X-CO2_PIPE_LEN-CO2_BOX_W/2;
+const CO2_BOX_Y=BOT_Y-1.9;
+lb(add(hcyl(0.12,CO2_PIPE_LEN,0x7a4a18),CO2_RISER_X-CO2_PIPE_LEN/2,CO2_BOX_Y,0),'CO₂ feed pipe','Connects pump unit directly to recirculation riser. Delivers CO₂ and nutrients continuously.');
+
+const co2Box=add(mkBox(CO2_BOX_W,1.8,1.0,0x3a2010),CO2_BOX_X,CO2_BOX_Y,0);
+co2Box.material=sm(0x3a2010,0.6,0.3);
+lb(co2Box,'CO₂ supply & circulation pump','Stores and injects waste industrial CO₂ into the system. Each kg of algae biomass grown absorbs 1.8kg of CO₂ — direct atmospheric carbon capture (SDG 13: Climate Action).');
+
+// Harvest
+const HARV_PIPE_LEN=1.1,HARV_BOX_W=1.3;
+const HARV_BOX_X=RISER_X+HARV_PIPE_LEN+HARV_BOX_W/2;
+lb(add(hcyl(0.10,HARV_PIPE_LEN,0x1a4a2a),RISER_X+HARV_PIPE_LEN/2,BOT_Y,0),'Harvest outlet pipe','Algae-rich culture drawn off here when optical density peaks. Harvest occurs every 3–7 days.');
+const harvBox=add(mkBox(HARV_BOX_W,1.0,1.0,0x0a2a18),HARV_BOX_X,BOT_Y,0);
+harvBox.material=sm(0x0a2a18,0.4,0.2);
+lb(harvBox,'Biomass harvest collector','Receives concentrated algae paste after centrifugation. Yield: 20–30g dry biomass/m²/day. Processed into biofuel (SDG 7), animal feed, or organic fertiliser (SDG 2).');
+
+// Sun
+const sunSph=add(new THREE.Mesh(new THREE.SphereGeometry(0.85,16,16),new THREE.MeshBasicMaterial({color:0xfff080})),13,11,6);
+lb(sunSph,'Solar energy input','Sunlight is the energy source driving photosynthesis inside the glass tubes. Algae convert 3–8% of solar energy into biomass — far more efficient per m² than conventional land crops.');
+for(let r=0;r<7;r++){
+  const pts=[sunSph.position.clone(),new THREE.Vector3(-5+r*1.8,3.5,0)];
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xffe060,transparent:true,opacity:0.1})));
+}
+
+// Stars
+const sv=[];for(let i=0;i<500;i++)sv.push((Math.random()-.5)*140,Math.random()*50+12,(Math.random()-.5)*140);
+const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
+scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:0.1,transparent:true,opacity:0.5})));
+
+// Raycaster
+const rc=new THREE.Raycaster();const mv=new THREE.Vector2();
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  mv.x=((e.clientX-r.left)/r.width)*2-1;mv.y=-((e.clientY-r.top)/r.height)*2+1;
+  rc.setFromCamera(mv,camera);
+  const hits=rc.intersectObjects(scene.children,true);
+  let found=null;
+  for(const h of hits){let o=h.object;while(o){if(o.userData&&o.userData.label){found=o;break;}o=o.parent;}if(found)break;}
+  document.getElementById('infobox').innerHTML=found
+    ?`<strong>${found.userData.label}</strong> — ${found.userData.desc}`
+    :'Hover any component to learn what it does.';
+});
+
+// Orbit controls
+let drag=false,px=0,py=0,sph={theta:0.3,phi:1.15,r:24};
+function uc(){camera.position.set(sph.r*Math.sin(sph.phi)*Math.sin(sph.theta),sph.r*Math.cos(sph.phi)+1,sph.r*Math.sin(sph.phi)*Math.cos(sph.theta));camera.lookAt(0,1,0);}
+canvas.addEventListener('mousedown',e=>{drag=true;px=e.clientX;py=e.clientY;spinOn=false;document.getElementById('bR').classList.remove('on');});
+window.addEventListener('mouseup',()=>drag=false);
+canvas.addEventListener('mousemove',e=>{if(!drag)return;sph.theta-=(e.clientX-px)*0.007;sph.phi=Math.max(0.25,Math.min(1.55,sph.phi-(e.clientY-py)*0.007));px=e.clientX;py=e.clientY;uc();});
+canvas.addEventListener('wheel',e=>{sph.r=Math.max(8,Math.min(42,sph.r+e.deltaY*0.025));uc();e.preventDefault();},{passive:false});
+
+// Touch
+let lt=null;
+canvas.addEventListener('touchstart',e=>{lt={x:e.touches[0].clientX,y:e.touches[0].clientY};spinOn=false;},{passive:true});
+canvas.addEventListener('touchmove',e=>{if(!lt)return;sph.theta-=(e.touches[0].clientX-lt.x)*0.007;sph.phi=Math.max(0.25,Math.min(1.55,sph.phi-(e.touches[0].clientY-lt.y)*0.007));lt={x:e.touches[0].clientX,y:e.touches[0].clientY};uc();},{passive:true});
+
+// Resize
+window.addEventListener('resize',()=>{const nw=window.innerWidth,nh=window.innerHeight;renderer.setSize(nw,nh);camera.aspect=nw/nh;camera.updateProjectionMatrix();});
+
+let T=0;
+function animate(){
+  requestAnimationFrame(animate);T+=0.016;
+  if(spinOn){sph.theta+=0.004;uc();}
+  tubeData.forEach((td,i)=>{
+    td.fm.color.setHSL(0.37,0.88,lightOn?(0.12+Math.sin(T*0.7+i*1.2)*0.04):0.04);
+    if(bubbleOn&&lightOn){
+      td.bubbles.forEach(b=>{b.wob+=b.ws;b.m.position.y+=b.spd;b.m.position.x=Math.sin(b.wob)*0.13;if(b.m.position.y>TUBE_H/2-0.2)b.m.position.y=-TUBE_H/2+0.2;b.m.material.opacity=0.55;});
+    }else{td.bubbles.forEach(b=>b.m.material.opacity=0.04);}
+  });
+  glow.intensity=lightOn?(1.5+Math.sin(T*0.5)*0.4):0.3;
+  renderer.render(scene,camera);
+}
+uc();animate();
+</script>
+</body>
+</html>
